@@ -1,14 +1,16 @@
 """
-Autenticação por e-mail (código de verificação) usando o Supabase Auth,
-com sessão persistente por cookie via `extra-streamlit-components`
-(biblioteca gratuita e de código aberto — sem nenhum custo).
+Autenticação por e-mail (código de verificação) usando o Supabase Auth —
+o único serviço dos que avaliamos que nunca pede cartão de crédito, nem
+no free tier nem para criar o projeto.
 
-Fluxo, sem senha e sem Google Cloud — só o Supabase, 100% gratuito:
+Sessão persistente por cookie via `extra-streamlit-components` (biblioteca
+gratuita e de código aberto, sem custo).
+
+Fluxo:
   1. O usuário digita o e-mail.
   2. O Supabase envia um e-mail com um código de 6 dígitos.
   3. O usuário digita o código de volta no app para confirmar o login.
-  4. O refresh_token da sessão é salvo em um cookie do navegador (30 dias),
-     então recarregar a página (F5) não desloga mais o usuário.
+  4. O refresh_token da sessão é salvo em cookie (30 dias) — F5 não desloga.
 
 Configuração necessária em .streamlit/secrets.toml (veja secrets.toml.example):
 
@@ -16,9 +18,10 @@ Configuração necessária em .streamlit/secrets.toml (veja secrets.toml.example
     url = "https://SEU-PROJETO.supabase.co"
     key = "SUA_ANON_KEY"
 
-E no painel do Supabase (Authentication > Email Templates > Magic Link),
-edite o template para incluir {{ .Token }} — é o código de 6 dígitos que
-o usuário digita de volta no app. Passo a passo completo em SETUP_LOGIN.md.
+E no painel do Supabase (Authentication > Email Templates), edite os
+templates **"Confirm signup"** E **"Magic Link"** para incluir
+{{ .Token }} — é o código de 6 dígitos que o usuário digita de volta no
+app. Passo a passo completo em SETUP_LOGIN.md.
 """
 from __future__ import annotations
 
@@ -41,7 +44,6 @@ COOKIE_DIAS_VALIDADE = 30
 
 
 def _get_cookie_manager():
-    """Instância única do gerenciador de cookies (mesma key = mesmo componente)."""
     if not COOKIES_DISPONIVEL:
         return None
     if "_cookie_manager" not in st.session_state:
@@ -60,7 +62,7 @@ def _salvar_cookie_sessao(cookie_manager, refresh_token: str) -> None:
             key="set_investdash_refresh_token",
         )
     except Exception:
-        pass # falha ao gravar cookie não deve derrubar o login
+        pass
 
 
 def _apagar_cookie_sessao(cookie_manager) -> None:
@@ -77,19 +79,13 @@ def _sessao_ativa() -> dict | None:
 
 
 def _tentar_restaurar_sessao(cookie_manager) -> None:
-    """Tenta reidratar a sessão a partir do refresh_token salvo em cookie.
-
-    Roda no máximo uma vez por sessão do navegador (controlado por uma
-    flag), para não ficar tentando repetidamente se o token for inválido.
-    """
+    """Reidrata a sessão a partir do refresh_token salvo em cookie (roda 1x por sessão)."""
     if cookie_manager is None or st.session_state.get("_sessao_restaurada"):
         return
 
     cookies = cookie_manager.get_all()
     if cookies is None:
-        # O componente ainda não retornou os cookies do navegador nesta
-        # execução — aguarda o próximo rerun automático do componente.
-        st.stop()
+        st.stop() # componente ainda não retornou os cookies — aguarda próximo rerun
 
     st.session_state["_sessao_restaurada"] = True
     refresh_token = cookies.get(COOKIE_NOME)
@@ -101,23 +97,19 @@ def _tentar_restaurar_sessao(cookie_manager) -> None:
         res = client.auth.refresh_session(refresh_token)
         if res and res.user and res.session:
             st.session_state["supabase_user"] = {"email": res.user.email, "id": res.user.id}
-            _salvar_cookie_sessao(cookie_manager, res.session.refresh_token) # tokens rotacionam
+            _salvar_cookie_sessao(cookie_manager, res.session.refresh_token)
             st.rerun()
     except Exception:
-        _apagar_cookie_sessao(cookie_manager) # cookie inválido/expirado
+        _apagar_cookie_sessao(cookie_manager)
 
 
 def exigir_login() -> None:
-    """Bloqueia o acesso ao app até o usuário confirmar o código enviado por e-mail.
-
-    Deve ser chamado logo após carregar o tema/CSS, antes de renderizar
-    qualquer conteúdo da aplicação.
-    """
+    """Bloqueia o acesso ao app até o usuário confirmar o código enviado por e-mail."""
     if not supabase_configurado():
         st.error(
             "Login ainda não configurado. Preencha `url` e `key` em "
-            "`.streamlit/secrets.toml` (veja `secrets.toml.example`) e ajuste o "
-            "template de e-mail no painel do Supabase — passo a passo completo "
+            "`.streamlit/secrets.toml` (veja `secrets.toml.example`) e ajuste os "
+            "templates de e-mail no painel do Supabase — passo a passo completo "
             "em `SETUP_LOGIN.md`."
         )
         st.stop()
@@ -148,6 +140,8 @@ def exigir_login() -> None:
     )
 
     client = get_client()
+    if client is None:
+        st.stop()
     etapa = st.session_state.get("login_etapa", "email")
 
     col = st.columns([1, 1.3, 1])[1]
@@ -225,3 +219,4 @@ def usuario_id() -> str:
     """Identificador estável do usuário logado (e-mail), usado como chave de armazenamento."""
     usuario = _sessao_ativa()
     return usuario["email"] if usuario else "anonimo"
+

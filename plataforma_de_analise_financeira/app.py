@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 
 import pandas as pd
 import plotly.express as px
@@ -51,8 +52,9 @@ st.set_page_config(
 
 
 def carregar_css():
+    caminho_css = os.path.join(os.path.dirname(os.path.abspath(__file__)), "style.css")
     try:
-        with open("style.css", encoding="utf-8") as f:
+        with open(caminho_css, encoding="utf-8") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
         st.warning("Arquivo style.css não encontrado — usando estilo padrão do Streamlit.")
@@ -793,7 +795,7 @@ elif aba == "Metas Financeiras":
             step=0.5,
         )
 
-    if st.button("Salvar meta"):
+    if st.button("💾 Salvar meta"):
         if salvar_meta(USER_ID, {"valor_meta": valor_meta, "aporte_mensal": aporte_mensal, "taxa_anual": taxa_anual}):
             st.session_state["meta_valor"] = valor_meta
             st.session_state["meta_aporte"] = aporte_mensal
