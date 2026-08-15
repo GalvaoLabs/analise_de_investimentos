@@ -1,47 +1,23 @@
-"""
-Autenticação por e-mail (código de verificação) usando o Supabase Auth —
-o único serviço dos que avaliamos que nunca pede cartão de crédito, nem
-no free tier nem para criar o projeto.
-
-Sessão persistente por cookie via `extra-streamlit-components` (biblioteca
-gratuita e de código aberto, sem custo).
-
-Fluxo:
-  1. O usuário digita o e-mail.
-  2. O Supabase envia um e-mail com um código de 6 dígitos.
-  3. O usuário digita o código de volta no app para confirmar o login.
-  4. O refresh_token da sessão é salvo em cookie (30 dias) — F5 não desloga.
-
-Configuração necessária em .streamlit/secrets.toml (veja secrets.toml.example):
-
-    [supabase]
-    url = "https://SEU-PROJETO.supabase.co"
-    key = "SUA_ANON_KEY"
-
-E no painel do Supabase (Authentication > Email Templates), edite os
-templates **"Confirm signup"** E **"Magic Link"** para incluir
-{{ .Token }} — é o código de 6 dígitos que o usuário digita de volta no
-app. Passo a passo completo em SETUP_LOGIN.md.
-"""
 from __future__ import annotations
-
+import base64
 from datetime import datetime, timedelta
-
 import streamlit as st
-
 from supabase_client import get_client, supabase_configurado
 
 try:
     import extra_streamlit_components as stx
-
     COOKIES_DISPONIVEL = True
-except ImportError: # biblioteca opcional — sem ela, a sessão não sobrevive a um F5
+except ImportError:
     stx = None
     COOKIES_DISPONIVEL = False
 
 COOKIE_NOME = "investdash_refresh_token"
 COOKIE_DIAS_VALIDADE = 30
 
+def carregar_imagem_base64(caminho):
+    with open(caminho, "rb") as arquivo:
+        dados = arquivo.read()
+    return base64.b64encode(dados).decode("utf-8")
 
 def _get_cookie_manager():
     if not COOKIES_DISPONIVEL:
@@ -49,7 +25,6 @@ def _get_cookie_manager():
     if "_cookie_manager" not in st.session_state:
         st.session_state["_cookie_manager"] = stx.CookieManager(key="investdash_cookie_manager")
     return st.session_state["_cookie_manager"]
-
 
 def _salvar_cookie_sessao(cookie_manager, refresh_token: str) -> None:
     if cookie_manager is None or not refresh_token:
@@ -64,7 +39,6 @@ def _salvar_cookie_sessao(cookie_manager, refresh_token: str) -> None:
     except Exception:
         pass
 
-
 def _apagar_cookie_sessao(cookie_manager) -> None:
     if cookie_manager is None:
         return
@@ -73,19 +47,16 @@ def _apagar_cookie_sessao(cookie_manager) -> None:
     except Exception:
         pass
 
-
 def _sessao_ativa() -> dict | None:
     return st.session_state.get("supabase_user")
 
-
 def _tentar_restaurar_sessao(cookie_manager) -> None:
-    """Reidrata a sessão a partir do refresh_token salvo em cookie (roda 1x por sessão)."""
     if cookie_manager is None or st.session_state.get("_sessao_restaurada"):
         return
 
     cookies = cookie_manager.get_all()
     if cookies is None:
-        st.stop() # componente ainda não retornou os cookies — aguarda próximo rerun
+        st.stop()
 
     st.session_state["_sessao_restaurada"] = True
     refresh_token = cookies.get(COOKIE_NOME)
@@ -102,15 +73,12 @@ def _tentar_restaurar_sessao(cookie_manager) -> None:
     except Exception:
         _apagar_cookie_sessao(cookie_manager)
 
-
 def exigir_login() -> None:
-    """Bloqueia o acesso ao app até o usuário confirmar o código enviado por e-mail."""
     if not supabase_configurado():
         st.error(
             "Login ainda não configurado. Preencha `url` e `key` em "
             "`.streamlit/secrets.toml` (veja `secrets.toml.example`) e ajuste os "
-            "templates de e-mail no painel do Supabase — passo a passo completo "
-            "em `SETUP_LOGIN.md`."
+            "templates de e-mail no painel do Supabase."
         )
         st.stop()
 
@@ -120,16 +88,13 @@ def exigir_login() -> None:
     if _sessao_ativa():
         return
 
-    if not COOKIES_DISPONIVEL:
-        st.info(
-            "💡 Instale `extra-streamlit-components` (já está no requirements.txt) "
-            "para manter o login entre recarregamentos da página."
-        )
+    # Carrega a imagem para o HTML
+    logo_base64 = carregar_imagem_base64("logo.png")
 
     st.markdown(
-        """
+        f"""
         <div style="max-width: 440px; margin: 10vh auto 24px auto; text-align: center;">
-            <div style="font-size: 42px; margin-bottom: 8px;">("logo.png")</div>
+            <img src="data:image/png;base64,{logo_base64}" style="max-width: 150px; margin-bottom: 16px;">
             <h1 style="border-bottom:none; margin-bottom: 6px;">Plataforma de Análise Financeira</h1>
             <p style="color: var(--text-secondary);">
                 Entre com seu e-mail para acessar sua carteira pessoal, salva com segurança na nuvem.
@@ -189,12 +154,10 @@ def exigir_login() -> None:
                     st.rerun()
 
     if COOKIES_DISPONIVEL:
-        st.caption(f"✅ Depois de confirmado, seu login fica salvo por {COOKIE_DIAS_VALIDADE} dias neste navegador.")
+        st.caption(f"✅ Depois de confirmado, seu login fica salvo por {COOKIE_DIAS_VALIDADE} dias.")
     st.stop()
 
-
 def render_user_badge() -> None:
-    """Mostra o usuário logado e o botão de sair na barra lateral."""
     usuario = _sessao_ativa()
     if not usuario:
         return
@@ -214,9 +177,7 @@ def render_user_badge() -> None:
                 st.rerun()
         st.markdown("---")
 
-
 def usuario_id() -> str:
-    """Identificador estável do usuário logado (e-mail), usado como chave de armazenamento."""
     usuario = _sessao_ativa()
     return usuario["email"] if usuario else "anonimo"
 
