@@ -129,7 +129,7 @@ def exigir_login() -> None:
     st.markdown(
         """
         <div style="max-width: 440px; margin: 10vh auto 24px auto; text-align: center;">
-            <div style="font-size: 42px; margin-bottom: 8px;">"logo.png"</div>
+            <div style="font-size: 42px; margin-bottom: 8px;">("logo.png")</div>
             <h1 style="border-bottom:none; margin-bottom: 6px;">Plataforma de Análise Financeira</h1>
             <p style="color: var(--text-secondary);">
                 Entre com seu e-mail para acessar sua carteira pessoal, salva com segurança na nuvem.
