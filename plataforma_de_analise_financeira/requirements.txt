@@ -1,8 +1,0 @@
-streamlit>=1.32
-supabase
-extra-streamlit-components
-pandas
-yfinance
-requests
-plotly
-google-generativeai
